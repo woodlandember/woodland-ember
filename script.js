@@ -17,23 +17,25 @@ document.addEventListener("DOMContentLoaded", () => {
     const submitButton = document.getElementById("submit-button");
     const yearElement = document.getElementById("year");
 
-    if (
-        !orderItems ||
-        !orderTotal ||
-        !orderForm ||
-        !clearButton ||
-        !formMessage ||
-        !submitButton
-    ) {
-        console.error("Woodland Ember: Required page elements are missing.");
-        return;
-    }
+   if (
+    !orderItems ||
+    !orderTotal ||
+    !orderForm ||
+    !clearButton ||
+    !formMessage ||
+    !submitButton
+) {
+    console.error("Woodland Ember: Required page elements are missing.");
+    return;
+}
 
     // =====================================
     // SETTINGS
     // =====================================
 
     const FORMSPREE_ENDPOINT = "https://formspree.io/f/xkjjezwy";
+
+    const RECAPTCHA_SITE_KEY = "6Le55hEuAAAAAEvhU-s55rB8JUZt63DZO9GiUXUQ";
 
     const currencyFormatter = new Intl.NumberFormat("en-US", {
         style: "currency",
@@ -43,6 +45,38 @@ document.addEventListener("DOMContentLoaded", () => {
     function money(amount) {
         return currencyFormatter.format(amount);
     }
+
+    let recaptchaLoader;
+
+function loadRecaptcha() {
+    if (
+        window.grecaptcha &&
+        typeof window.grecaptcha.execute === "function"
+    ) {
+        return Promise.resolve(window.grecaptcha);
+    }
+
+    if (!recaptchaLoader) {
+        recaptchaLoader = new Promise((resolve, reject) => {
+            const script = document.createElement("script");
+
+            script.src =
+              " https://www.google.com/recaptcha/api.js?render=${RECAPTCHA_SITE_KEY}" ;
+
+            script.async = true;
+
+            script.onload = () => resolve(window.grecaptcha);
+
+            script.onerror = () => {
+                reject(new Error("Unable to load Google reCAPTCHA."));
+            };
+
+            document.head.appendChild(script);
+        });
+    }
+
+    return recaptchaLoader;
+}
 
     // =====================================
     // STATUS MESSAGES
@@ -374,6 +408,30 @@ orderForm.addEventListener("submit", async event => {
 
         // Collect customer information
         const formData = new FormData(orderForm);
+
+        // Generate Google reCAPTCHA verification token
+const recaptcha = await loadRecaptcha();
+
+const recaptchaToken = await new Promise((resolve, reject) => {
+    recaptcha.ready(async () => {
+        try {
+            const token = await recaptcha.execute(
+                RECAPTCHA_SITE_KEY,
+                { action: "submit" }
+            );
+
+            resolve(token);
+        } catch (error) {
+            reject(error);
+        }
+    });
+});
+
+if (!recaptchaToken) {
+    throw new Error("Security verification failed. Please try again.");
+}
+
+formData.set("g-recaptcha-response", recaptchaToken);
 
       // Collect selected products
 const items = Array.from(cart.values()).map(item => {
